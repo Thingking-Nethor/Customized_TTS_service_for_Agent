@@ -33,7 +33,7 @@ class TTSStreamer:
         self._mixer_initialized: bool = False
         self._current_sound = None
         self.is_playing: bool = False  # 添加播放状态标志
-        self._response: bytes = None  # 存储当前响应的音频数据
+        self._response = None  # 存储当前响应的音频数据
         print(f"✅ 已加载配置文件，目标字符串: {self.ts}")
         
         
@@ -44,7 +44,7 @@ class TTSStreamer:
         self.tone_index: int = 0  # 用于选择语气的索引
     
     
-    def _filter_text(self, text: str = None):
+    def _filter_text(self, text: str) -> str:
         """过滤文本"""
         # 过滤括号内容
         if self.json["filter_brackets"]:
@@ -60,7 +60,7 @@ class TTSStreamer:
         print(f"✅ 文本过滤完成：{text}")
         return text
     
-    def replace_in_string(self, text: str = None):
+    def replace_in_string(self, text: str) -> str:
         """查找并替换字符串中的目标字符串"""
         if self.ts in self.url:
             print(f"✅ 在URL中找到目标字符串 {self.ts}，正在替换文本...")
@@ -69,7 +69,7 @@ class TTSStreamer:
             logging.error("输入URL不是字符串，无法替换文本。")
             return self.url
     
-    def replace_in_dict(self, text: str = None):
+    def replace_in_dict(self, text: str) -> dict:
         """查找并替换字符串中的目标字符串"""
         if self.ts in self.params.values():
             print(f"✅ 在参数中找到目标字符串 {self.ts}，正在替换文本...")
@@ -125,21 +125,21 @@ class TTSStreamer:
     async def _handle_response(self):
         """处理响应结果"""
         if self._response.status != 200:
-            error_text = await self._response.text()
+            error_text: str = await self._response.text()
             logging.error(f"❌ 语音生成失败 {self._response.status}: {error_text}\n请检查配置文件中的URL和参数是否正确，并确保服务器正常运行。")
             return None
 
         print("✅ 语音生成成功！")
 
         # 读取响应内容到内存
-        content = await self._response.read()
+        content: bytes = await self._response.read()
 
         # 仅在 save_audio 为 True 时保存到硬盘
         try:
             if self.json.get("save_audio", False):
                 os.makedirs('voice/output', exist_ok=True)
                 file_count = len(os.listdir('voice/output'))
-                if os.path.abspath(self.json.get("output_path")):
+                if os.path.exists(self.json.get("output_path")):
                     file_path = os.path.join(self.json["output_path"], f'output{file_count}.wav')
                 else:
                     file_path = f'voice/output/output{file_count}.wav'
@@ -284,7 +284,7 @@ if __name__ == "__main__":
     streamer = TTSStreamer("Dandelion")  #根据需要替换为你的配置文件名（json文件，不带扩展名）
     # 运行主程序
     streamer._push_text(text0)
-    for t in re.split(r'[。！？；…… . ]', "阳光透过代码的缝隙洒下来，暖洋洋的。你今天看起来精神不错，是刚调试完一段有趣的算法，还是单纯享受这片刻的宁静？"):
+    for t in re.split(r'[。！？；…….?!\n]', "阳光透过代码的缝隙洒下来，暖洋洋的。你今天看起来精神不错，是刚调试完一段有趣的算法，还是单纯享受这片刻的宁静？"):
         streamer._push_text(t)
     asyncio.run(streamer.generate_stream())
     os.system("pause")
