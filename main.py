@@ -120,7 +120,7 @@ def main():
             accumulated += chunk
             full_response_chunks.append(chunk)
             while True:
-                m = re.search(r'[。！？；……]', accumulated)
+                m = re.search(r'[。！？；…….?!\n]', accumulated)
                 if not m:
                     break
                 idx = m.end()
