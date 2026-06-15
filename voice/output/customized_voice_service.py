@@ -36,7 +36,8 @@ class TTSStreamer:
         self._response = None  # 存储当前响应的音频数据
         print(f"✅ 已加载配置文件，目标字符串: {self.ts}")
         
-        
+        self.start_time: float = 0  # 记录开始时间
+        self.end_time: float = 0  # 记录结束时间
         self.is_processing: bool = False
         self.sentence_queue: Queue[str] = Queue()
         self.mission_queue = asyncio.Queue()  # 使用 asyncio.Queue 管理任务
@@ -226,6 +227,8 @@ class TTSStreamer:
     def _push_text(self, text: str):
         """向文本队列中添加文本"""
         self.sentence_queue.put(self._filter_text(text))  #调用文本过滤函数
+        if not self.is_processing:
+            self.start_time = time.time()
         print(f"✅ 已添加文本到队列: {text}")
     
     def _change_tone(self, tone_index: int):
@@ -241,10 +244,10 @@ class TTSStreamer:
         async def producer():
             #等待文本队列更新
             while not update_texts_task.done():
+                i = 0  # 这里可以根据需要调整索引
                 await asyncio.sleep(0.5)
                 while not self.sentence_queue.empty() if isinstance(self.sentence_queue, Queue) else self.sentence_queue:
                     self.sentences = self.sentence_queue.get() if isinstance(self.sentence_queue, Queue) else self.sentence_queue.pop(0)
-                    i = 0  # 这里可以根据需要调整索引
                     print(f"🎤 生成第 {i+1} 段...")
                     audio_data = await self.send_requests()
                     if audio_data:
@@ -260,6 +263,9 @@ class TTSStreamer:
                 if item is None:
                     break
                 index, audio_data = item  # 获取音频数据
+                if index == 0:  # 只有在处理第一段文本时才记录时间
+                    self.end_time = time.time()  # 更新结束时间
+                    print(f"⏱️ TTS反应耗时 {self.end_time - self.start_time:.2f} 秒")
                 await self.play_audio(audio_data)
         
         #更新文本队列
