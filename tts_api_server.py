@@ -1,5 +1,4 @@
 import asyncio
-from collections.abc import Iterable
 from fastapi import FastAPI
 import json
 import re
