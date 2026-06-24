@@ -8,7 +8,7 @@ import json
 import os
 import pygame
 from queue import Queue
-import io
+from io import BytesIO
 import re
 import time
 
@@ -192,7 +192,7 @@ class TTSStreamer:
                 await asyncio.sleep(0.05)
 
                 # 直接从内存创建 Sound 对象并播放
-                self._current_sound = pygame.mixer.Sound(io.BytesIO(audio_data))
+                self._current_sound = pygame.mixer.Sound(BytesIO(audio_data))
                 self._current_sound.play()
                 self.is_playing = True
                 print("正在播放音频...")
