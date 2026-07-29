@@ -35,4 +35,8 @@
     "output_size": -16,
     "save_audio": false,
     "output_path": ""    #填写绝对路径，程序默认为相对路径".\voice\output\output"
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> eece9ea (连接远程仓库)

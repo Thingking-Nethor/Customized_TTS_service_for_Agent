@@ -1,13 +1,29 @@
 [project]
+<<<<<<< HEAD
 name = "customized_TTS_service_for_Agent"
+=======
+name = "Customized_TTS_service_for_Agent"
+>>>>>>> eece9ea (连接远程仓库)
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "aiohttp>=3.13.5",
+<<<<<<< HEAD
     "dotenv>=0.9.9",
     "fastapi>=0.136.3",
     "pydantic-ai>=1.87.0",
     "pygame>=2.6.1",
+=======
+    "cython>=3.2.5",
+    "dotenv>=0.9.9",
+    "fastapi>=0.136.3",
+    "pydantic-ai>=1.87.0",
+    "pydub>=0.25.1",
+    "pygame>=2.6.1",
+    "setuptools>=82.0.1",
+    "sounddevice>=0.5.5",
+    "soundfile>=0.14.0",
+>>>>>>> eece9ea (连接远程仓库)
 ]
