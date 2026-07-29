@@ -8,8 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
-<<<<<<< HEAD
-=======
 
 # Environment variables
 .env
@@ -32,8 +30,8 @@ voice/output/config/Dandelion.json
 development_logs.md
 voice/output/future_concept.md
 
-# Cusomized character files
-characters/*
+# Customized character files
+characters/
 
 # Pycaches
 ui/__pycache__/
@@ -45,4 +43,3 @@ tools/__pycache__/
 # test code
 voice/output/customized_voice_service_sd.py
 openai_format.py
->>>>>>> eece9ea (连接远程仓库)
