@@ -13,7 +13,7 @@ wheels/
 .env
 
 apiserver/
-references/
+reference/
 logs/
 test_zone/
 system/
