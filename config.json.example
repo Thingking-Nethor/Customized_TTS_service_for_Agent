@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 {
     "system": {
         "character_name": "",
@@ -26,32 +25,3 @@
         "opacity": 0.9    # 窗口透明度，0.3~1.0，越小越透明
     }
 }
-=======
-{
-    "system": {
-        "character_name": "",
-        "user_name": ""
-    },
-    "api": {                   #该功能未上线，无需填写，默认使用DeepSeek的API服务
-        "base_url": "",
-        "api_key": "",
-        "model": "",
-        "max_history_rounds": 10
-    },
-    "tts": {
-        "tts_service": true,    # 是否启用语音服务
-        "voice_config_filename": "config",    # 无需写后缀名
-        "auto_start_GPT-SoVITS_api": true,    #是否自动启动GPT-SoVITS的API服务
-        "GPT-SoVITS_directory_path": ""    #GPT-SoVITS的根目录
-    },
-    "stt": {                   #该功能未上线，无需填写
-        "stt_service": true,
-        "base_url": "http://",
-        "api_key": "",
-        "model": "whisper-1"
-    },
-    "window": {
-        "opacity": 0.9    # 窗口透明度，0.3~1.0，越小越透明
-    }
-}
->>>>>>> eece9ea (连接远程仓库)

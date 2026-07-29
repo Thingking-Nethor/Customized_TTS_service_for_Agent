@@ -1,9 +1,5 @@
 import asyncio
-<<<<<<< HEAD
-import atexit
-=======
 import signal
->>>>>>> eece9ea (连接远程仓库)
 from ui.conversation_ui import ConversationWindow
 from dotenv import load_dotenv
 from dotenv import set_key
@@ -14,10 +10,7 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, Te
 from queue import Queue
 import re
 import subprocess
-<<<<<<< HEAD
-=======
 import sys
->>>>>>> eece9ea (连接远程仓库)
 from threading import Thread
 import time
 import tools.tools as tools
@@ -140,17 +133,10 @@ def check():
             f.write(config_example)
         print("⚠️ 未找到config.json，已创建默认配置文件")
 
-<<<<<<< HEAD
-def _cleanup_tts():
-    """程序退出时关闭TTS子进程窗口"""
-    tts_api_process.terminate()
-atexit.register(_cleanup_tts)
-=======
 def _cleanup_tts(signal, frame):
     """程序退出时关闭TTS子进程窗口"""
     tts_api_process.terminate()
     sys.exit(0)
->>>>>>> eece9ea (连接远程仓库)
 
 def main():
     max_history_rounds: int = config["api"].get("max_history_rounds", 50)
@@ -174,11 +160,8 @@ def main():
         return
 
     def handle_input(user_input: str):
-<<<<<<< HEAD
-=======
         '''处理用户输入，调用语言模型代理生成回复，
         并将回复文本流式显示在对话窗口中，同时发送给TTS服务进行语音合成'''
->>>>>>> eece9ea (连接远程仓库)
         nonlocal history
         global ref_audio_path_and_prompt_text_index
         ref_audio_path_and_prompt_text_index = 0
@@ -186,10 +169,7 @@ def main():
         full_response_chunks: list[str] = []
         conv_win.add_agent_prefix()
         result = agent.run_stream_sync(user_input, message_history=history)
-<<<<<<< HEAD
-=======
         # 在接收模型回复的流式增量结果时，实时将文本显示在对话窗口中，并在文本切分后发送给TTS服务进行语音合成
->>>>>>> eece9ea (连接远程仓库)
         for chunk in result.stream_text(delta=True):
             conv_win.add_agent_chunk(chunk)
             accumulated += chunk
@@ -197,40 +177,28 @@ def main():
             while True:
                 m: re.Match[str] | None = re.search(r'[。！？；…….?!\n]', accumulated)
                 if m is None:
-<<<<<<< HEAD
-=======
                     if accumulated.strip() and tts_service_enabled:
                         streamer._push_text(accumulated.strip())
                         accumulated = ""
->>>>>>> eece9ea (连接远程仓库)
                     break
                 idx = m.end()
                 sentence = accumulated[:idx].strip()
                 accumulated = accumulated[idx:]
                 if sentence and tts_service_enabled:
                     streamer._push_text(sentence)
-<<<<<<< HEAD
-=======
         # 对话结束后将本轮对话加入历史，并保存到日志文件中
->>>>>>> eece9ea (连接远程仓库)
         history = list(result.all_messages())
         max_messages = max_history_rounds * 2
         if len(history) > max_messages:
             history = history[-max_messages:]
         timestamp: str = time.strftime("%Y-%m-%d", time.localtime())
-<<<<<<< HEAD
-=======
         # 将对话保存到logs目录下以日期命名的文本文件中
->>>>>>> eece9ea (连接远程仓库)
         os.makedirs("logs", exist_ok=True)
         with open(f"logs\\{timestamp}.txt", "a", encoding="utf-8") as f:
             f.write(f"{config['system']['user_name']}: {user_input}\n\n")
             f.write(f"{config['system']['character_name']}: {''.join(full_response_chunks)}\n\n")
         print(f"对话已保存到 logs\\{timestamp}.txt")
-<<<<<<< HEAD
-=======
         # 如果TTS服务启用但没有在对话中检测到任何标点符号，仍然需要将完整的回复文本发送给TTS服务进行合成
->>>>>>> eece9ea (连接远程仓库)
         if accumulated.strip() and tts_service_enabled:
             streamer._push_text(accumulated.strip())
 
@@ -250,7 +218,7 @@ if __name__ == "__main__":
         print("✅ 语言模型代理创建成功")
     except Exception as e:
         print(f"❌ 无法创建语言模型代理: {e}")
-        exit(1)
+        sys.exit(1)
 
     # 启动SoVITS-GPT服务（新命令行窗口）
     if tts_service_enabled and config["tts"].get("auto_start_GPT-SoVITS_api", False):
@@ -259,10 +227,7 @@ if __name__ == "__main__":
                 f"{script_path}",
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
             )
-<<<<<<< HEAD
-=======
             signal.signal(signal.SIGINT, _cleanup_tts)
->>>>>>> eece9ea (连接远程仓库)
             print("✅ TTS服务启动成功")
         except Exception as e:
             print(f"❌ 启动TTS服务失败: {e}")
@@ -272,8 +237,4 @@ if __name__ == "__main__":
     if tts_service_enabled:
         Thread(target=asyncio.run, args=(streamer.generate_stream(),), daemon=True).start()
     check()
-<<<<<<< HEAD
     main()
-=======
-    main()
->>>>>>> eece9ea (连接远程仓库)

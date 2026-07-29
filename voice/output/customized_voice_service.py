@@ -6,10 +6,7 @@ import asyncio
 import logging
 import json
 import os
-<<<<<<< HEAD
-=======
 from pydub import AudioSegment
->>>>>>> eece9ea (连接远程仓库)
 import pygame
 from queue import Queue
 from io import BytesIO
@@ -47,10 +44,7 @@ class TTSStreamer:
         self.mission_queue = asyncio.Queue()  # 使用 asyncio.Queue 管理任务
         self.sentences: str = ""  # 存储即将推理的文本
         self.tone_index: int = 0  # 用于选择语气的索引
-<<<<<<< HEAD
-=======
         self.audio_object: BytesIO = None  # 用于存储音频数据的BytesIO对象
->>>>>>> eece9ea (连接远程仓库)
     
     
     def _filter_text(self, text: str) -> str:
@@ -158,12 +152,6 @@ class TTSStreamer:
         except Exception as e:
             logging.error(f"❌ 保存音频失败: {e}")
 
-<<<<<<< HEAD
-        return content  # 返回音频字节数据
-    
-    async def play_audio(self, audio_data: bytes):
-        '''播放音频（直接从内存）'''
-=======
         try:
             # 切除音频开头的静音部分
             audio_segment = AudioSegment.from_wav(BytesIO(content))
@@ -191,7 +179,6 @@ class TTSStreamer:
             self.end_time = time.time()  # 更新结束时间
             print(f"⏱️ TTS反应耗时 {self.end_time - self.start_time:.2f} 秒")
         
->>>>>>> eece9ea (连接远程仓库)
         if not audio_data:
             logging.warning("音频数据为空")
             return
@@ -203,11 +190,7 @@ class TTSStreamer:
             if not self._mixer_initialized:
                 try:
                     pygame.mixer.init(
-<<<<<<< HEAD
-                        frequency=self.json.get("output_frequency", 22050),
-=======
                         frequency=self.json.get("output_frequency", 44100),
->>>>>>> eece9ea (连接远程仓库)
                         size=self.json.get("output_size", -16),
                         channels=self.json.get("output_channels", 1),
                         buffer=512
@@ -234,11 +217,7 @@ class TTSStreamer:
                 await asyncio.sleep(0.05)
 
                 # 直接从内存创建 Sound 对象并播放
-<<<<<<< HEAD
-                self._current_sound = pygame.mixer.Sound(BytesIO(audio_data))
-=======
                 self._current_sound = pygame.mixer.Sound(audio_data)
->>>>>>> eece9ea (连接远程仓库)
                 self._current_sound.play()
                 self.is_playing = True
                 print("正在播放音频...")
@@ -261,11 +240,7 @@ class TTSStreamer:
                 raise e
 
         except Exception as e:
-<<<<<<< HEAD
-            logging.error(f"❌ 音频播放失败：{e}")
-=======
             logging.error(f"❌ 音频系统错误：{e}")
->>>>>>> eece9ea (连接远程仓库)
         
     def clear_audio_cache(self):
         '''清除内存中的音频数据'''
@@ -299,16 +274,10 @@ class TTSStreamer:
                 while not self.sentence_queue.empty() if isinstance(self.sentence_queue, Queue) else self.sentence_queue:
                     self.sentences = self.sentence_queue.get() if isinstance(self.sentence_queue, Queue) else self.sentence_queue.pop(0)
                     print(f"🎤 生成第 {i+1} 段...")
-<<<<<<< HEAD
-                    audio_data = await self.send_requests()
-                    if audio_data:
-                        await self.mission_queue.put((i, audio_data))  # 将索引和音频数据推入队列
-=======
                     await self.send_requests()
                     audio_data: BytesIO = self.audio_object
                     if audio_data:
                         await self.mission_queue.put((i, audio_data))  # 将索引和音频对象推入队列
->>>>>>> eece9ea (连接远程仓库)
                     i += 1
                     await asyncio.sleep(0.1)  # 控制生成速度
             await self.mission_queue.put(None)  # 完成信号
@@ -316,18 +285,7 @@ class TTSStreamer:
         # 消费者：播放音频
         async def consumer():
             while True:
-<<<<<<< HEAD
-                item = await self.mission_queue.get()
-                if item is None:
-                    break
-                index, audio_data = item  # 获取音频数据
-                if index == 0:  # 只有在处理第一段文本时才记录时间
-                    self.end_time = time.time()  # 更新结束时间
-                    print(f"⏱️ TTS反应耗时 {self.end_time - self.start_time:.2f} 秒")
-                await self.play_audio(audio_data)
-=======
                 await self.play_audio()
->>>>>>> eece9ea (连接远程仓库)
         
         #更新文本队列
         async def update_texts():
@@ -354,8 +312,4 @@ if __name__ == "__main__":
     for t in re.split(r'[。！？；…….?!\n]', "阳光透过代码的缝隙洒下来，暖洋洋的。你今天看起来精神不错，是刚调试完一段有趣的算法，还是单纯享受这片刻的宁静？"):
         streamer._push_text(t)
     asyncio.run(streamer.generate_stream())
-<<<<<<< HEAD
     os.system("pause")
-=======
-    os.system("pause")
->>>>>>> eece9ea (连接远程仓库)
