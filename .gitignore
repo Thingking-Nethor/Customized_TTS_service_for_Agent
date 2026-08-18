@@ -16,7 +16,6 @@ apiserver/
 reference/
 logs/
 test_zone/
-system/
 uv.lock
 
 # VSCode settings

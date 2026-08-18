@@ -1,18 +1,20 @@
 import asyncio
 from fastapi import FastAPI
-import json
+import os
 import re
-import signal
+import requests
+from signal import signal, SIGINT, CTRL_BREAK_EVENT
 import subprocess
 import sys
+from system.config import AgentConfig, load_config, load_tts_config
+import time
 # from system.config import AgentConfig as config
 from threading import Thread
 import uvicorn
 from voice.output.customized_voice_service import TTSStreamer
 
 tts_service = FastAPI()
-with open("config.json", "r", encoding="utf-8") as f:
-    config: dict[str, dict[str, str|bool]] = json.load(f)
+config: AgentConfig = load_config()
 
 @tts_service.get("/")
 def echo() -> dict[str, str]:
@@ -40,33 +42,47 @@ def generate_tts(text: str) -> dict[str, str]:
 def close_tts_terminate(signal, frame) -> None:
     print("正在关闭tts终端……")
     global tts_api_process
+    if os.name == 'nt':
+        tts_api_process.send_signal(CTRL_BREAK_EVENT)
+    else:
+        tts_api_process.send_signal(SIGINT)
     tts_api_process.terminate()
     sys.exit(0)
 
 if __name__ == "__main__":
     try:
-        tts_api_process: subprocess.Popen[bytes] = subprocess.Popen(
-            r"tools\go_api_v2.bat",
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
-        # 非阻塞检查进程是否立即退出（启动失败）
-        import time
-        time.sleep(1)
-        if tts_api_process.poll() is not None and config["tts"]["auto_start_GPT-SoVITS_api"]:
-            stdout: bytes
-            stderr: bytes
-            stdout, stderr = tts_api_process.communicate()
-            print(f"❌ TTS外部服务启动失败 (exit code: {tts_api_process.returncode})")
-            if stderr:
-                print(f"stderr:\n{stderr}")
-            if stdout:
-                print(f"stdout:\n{stdout}")
-        else:
-            print("✅ TTS外部服务启动成功")
-        signal.signal(signal.SIGINT, close_tts_terminate)
+        if config.tts.auto_start_GPT_SoVITS_api:
+            tts_api_process: subprocess.Popen[bytes] = subprocess.Popen(
+                args=r"tools\go_api_v2.bat",
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+            )
+            # 非阻塞检查进程是否立即退出（启动失败）
+            time.sleep(1)
+            if tts_api_process.poll():
+                stdout: bytes
+                stderr: bytes
+                stdout, stderr = tts_api_process.communicate()
+                print(f"❌ TTS外部服务启动失败 (exit code: {tts_api_process.returncode})")
+                if stderr:
+                    print(f"stderr:\n{stderr}")
+                if stdout:
+                    print(f"stdout:\n{stdout}")
+            else:
+                print("✅ TTS外部服务启动成功")
+            signal(SIGINT, close_tts_terminate)
     except Exception as e:
         print(f"❌ 启动TTS服务失败: {e}")
     #根据需要替换为你的配置文件名（json文件，不带扩展名）
-    streamer: TTSStreamer = TTSStreamer(config["tts"]["voice_config_filename"])
+    streamer: TTSStreamer = TTSStreamer(load_tts_config())
+    while True:
+        try:
+            init_request = requests.post(url=streamer.url, json=streamer.params.model_dump())  # 发送初始请求以初始化Bert
+        except requests.exceptions.ConnectionError:
+            print("推理端未完全启动，等待3秒")
+            time.sleep(3)
+        else:
+            print(f"✅ 发送初始请求成功，Bert已初始化: {init_request.status_code}")
+            del init_request
+            break
     Thread(target=asyncio.run, args=(streamer.generate_stream(),), daemon=True).start()
     uvicorn.run(tts_service, host="127.0.0.1", port=8997)

@@ -4,13 +4,13 @@
 import aiohttp
 import asyncio
 import logging
-import json
 import os
 from pydub import AudioSegment
 import pygame
 from queue import Queue
 from io import BytesIO
 import re
+from system.config import TtsConfig, PostParams, load_tts_config
 import time
 
 
@@ -18,81 +18,79 @@ import time
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class TTSStreamer:
-    def __init__(self, config_file: str = "config"):
+    def __init__(self, config: TtsConfig):
         self.audio_available: bool = True
-        try:
-            with open(f".\\voice\\output\\config\\{config_file}.json", "r", encoding="utf-8") as f:
-                self.json: dict = json.load(f)
-            print(f"✅ 已加载TTS配置文件: {config_file}.json")
-        except FileNotFoundError:
-            logging.error("❌ TTS配置文件 " + config_file + ".json 未找到")
-        except json.JSONDecodeError:
-            logging.error("❌ TTS配置文件 " + config_file + ".json 格式错误")
-        self.ts: str = self.json["text_sign"]
-        self.url: str = self.json["curl"]
-        self.params: dict = self.json["params"]
+        if isinstance(config, TtsConfig):
+            print(f"✅ 已加载TTS配置文件: {config.name}.json")
+            self.json: TtsConfig = config
+        else:
+            print(f'参数 "config" 类型错误：{type(config)}')
+        self.ts: str = self.json.text_sign
+        self.url: str = self.json.curl
+        self.params: PostParams = self.json.params
         self._mixer_initialized: bool = False
         self._current_sound = None
         self.is_playing: bool = False  # 添加播放状态标志
-        self._response = None  # 存储当前响应的音频数据
+        self._response: aiohttp.ClientResponse = None  # 存储当前响应的音频数据
         print(f"✅ 已加载配置文件，目标字符串: {self.ts}")
         
         self.start_time: float = 0  # 记录开始时间
         self.end_time: float = 0  # 记录结束时间
         self.is_processing: bool = False
-        self.sentence_queue: Queue[str] = Queue()
+        self.sentence_queue: Queue[tuple[str, int]] = Queue()
         self.mission_queue = asyncio.Queue()  # 使用 asyncio.Queue 管理任务
-        self.sentences: str = ""  # 存储即将推理的文本
-        self.tone_index: int = 0  # 用于选择语气的索引
-        self.audio_object: BytesIO = None  # 用于存储音频数据的BytesIO对象
+        self.sentences: tuple[str, int] = ("", 0)  # 存储即将推理的文本
+        # self.tone_index: int = 0  # 用于选择语气的索引
+        self.audio_object: BytesIO = BytesIO()  # 用于存储音频数据的BytesIO对象
     
     
     def _filter_text(self, text: str) -> str:
         """过滤文本"""
         # 过滤括号内容
-        if self.json["filter_brackets"]:
+        if self.json.filter_brackets:
             text = re.sub(r'【.*?】', '', text)
             text = re.sub(r'\[.*?\]', '', text)
         # 过滤特殊字符（不过滤中文）
-        if self.json["filter_special_chars"]:
+        if self.json.filter_special_chars:
             # 移除表情符号（简化版）
             text = re.sub(r'[\U00010000-\U0010FFFF]', '', text)
             # 移除一些特殊符号（保留中文和常用标点）
             # 使用原始字符串，注意 \w 在 Python 3 中包含中文
-            text = re.sub(r'[^\w\s，。！？、；：""''（）【】,.!?;:()\-\+\*/=<>@#$%^&_|\\`~]', '', text)
+            text = re.sub('[^\\w\\s，。！？、；：""''（）【】,.!?;:()\\-\\+\\*/=<>@#$%^&_|\\`~]', '', text)
         print(f"✅ 文本过滤完成：{text}")
         return text
     
-    def replace_in_string(self, text: str) -> str:
+    def replace_in_string(self, text: str) -> bool:
         """查找并替换字符串中的目标字符串"""
         if self.ts in self.url:
             print(f"✅ 在URL中找到目标字符串 {self.ts}，正在替换文本...")
-            return re.sub(self.ts, text, self.url)
+            re.sub(self.ts, text, self.url)
+            return True
         else:
             logging.error("输入URL不是字符串，无法替换文本。")
-            return self.url
+            return False
     
-    def replace_in_dict(self, text: str) -> dict:
+    def replace_in_dict(self, text: str) -> bool:
         """查找并替换字符串中的目标字符串"""
-        if self.ts in self.params.values():
-            print(f"✅ 在参数中找到目标字符串 {self.ts}，正在替换文本...")
-            return {k:v.replace(self.ts, text) if type(v) == str else v for k, v in self.params.items()}
-        else:
-            logging.error("param中不包含目标字符串，无法替换文本。")
-            return self.params
+        try:
+            self.params.text = text
+            return True
+        except KeyError:
+            logging.error("❌ 参数字典中未找到 'text' 键，无法替换文本。")
+            return False
     
-    async def send_requests(self):
+    async def send_requests(self) -> BytesIO | None:
         """选择相应的参考音频和参考文本并，发送请求并处理响应"""
-        if not self.sentences.strip():
+        if not self.sentences[0].strip():
             logging.warning("⚠️ 输入文本为空，跳过生成")
             return None
         
         # 根据索引选择参考音频和参考文本
-        if self.json["variable_ref_audio_and_prompt_text"]:
-            if self.json["ref_audio_path_list"] and self.json["prompt_text_list"]:
-                self.params["ref_audio_path"] = self.json["ref_audio_path_list"][self.tone_index]
-                self.params["prompt_text"] = self.json["prompt_text_list"][self.tone_index]
-                print(f"✅ 选择参考音频: {self.params['ref_audio_path']}\n✅ 选择参考文本: {self.params['prompt_text']}")
+        if self.json.variable_ref_audio_and_prompt_text:
+            if self.json.ref_audio_path_list and self.json.prompt_text_list:
+                self.params.ref_audio_path = self.json.ref_audio_path_list[self.sentences[1]]
+                self.params.prompt_text = self.json.prompt_text_list[self.sentences[1]]
+                print(f"✅ 选择参考音频: {self.params.ref_audio_path}\n✅ 选择参考文本: {self.params.prompt_text}")
             else:
                 pass  # 如果没有提供列表，就使用默认的参数值（不替换）
         
@@ -102,18 +100,26 @@ class TTSStreamer:
         try:
             # 判断请求类型
             if self.params is None:
-                print(f"✅ 发送GET请求: {self.replace_in_string(self.sentences)}...")
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(self.replace_in_string(self.sentences)) as self._response:
-                        return await self._handle_response()
+                if self.replace_in_string(self.sentences[0]):
+                    print(f"✅ 发送GET请求: {self.url}")
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
+                        async with session.get(self.url) as self._response:
+                            return await self._handle_response()
+                else:
+                    logging.error("❌ 无法发送GET请求，因为URL中未找到目标字符串。")
+                    return None
             else:
-                print(f"✅ 发送POST请求: {self.url}...")
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.post(
-                        self.url, 
-                        json=self.replace_in_dict(self.sentences)
-                    ) as self._response:
-                        return await self._handle_response()
+                if self.replace_in_dict(self.sentences[0]):
+                    print(f"✅ 发送POST请求: {self.url}\n{self.params}")
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
+                        async with session.post(
+                            self.url, 
+                            json=self.params.model_dump(),
+                        ) as self._response:
+                            return await self._handle_response()
+                else:
+                    logging.error("❌ 无法发送POST请求，因为参数字典中未找到 'text' 键。")
+                    return None
         
         except asyncio.TimeoutError:
             logging.error("❌ 请求超时")
@@ -125,7 +131,7 @@ class TTSStreamer:
             logging.error(f"❌ 请求发送失败: {e}")
             return None
     
-    async def _handle_response(self):
+    async def _handle_response(self) -> BytesIO | None:
         """处理响应结果"""
         if self._response.status != 200:
             error_text: str = await self._response.text()
@@ -139,11 +145,11 @@ class TTSStreamer:
 
         # 仅在 save_audio 为 True 时保存到硬盘
         try:
-            if self.json.get("save_audio", False):
+            if self.json.save_audio:
                 os.makedirs('voice/output', exist_ok=True)
                 file_count = len(os.listdir('voice/output'))
-                if os.path.exists(self.json.get("output_path")):
-                    file_path = os.path.join(self.json["output_path"], f'output{file_count}.wav')
+                if os.path.exists(self.json.output_path):
+                    file_path = os.path.join(self.json.output_path, f'output{file_count}.wav')
                 else:
                     file_path = f'voice/output/output{file_count}.wav'
                 with open(file_path, 'wb') as f:
@@ -190,9 +196,9 @@ class TTSStreamer:
             if not self._mixer_initialized:
                 try:
                     pygame.mixer.init(
-                        frequency=self.json.get("output_frequency", 44100),
-                        size=self.json.get("output_size", -16),
-                        channels=self.json.get("output_channels", 1),
+                        frequency=self.json.output_frequency,
+                        size=self.json.output_size,
+                        channels=self.json.output_channels,
                         buffer=512
                     )
                     self._mixer_initialized = True
@@ -249,17 +255,17 @@ class TTSStreamer:
     
     
     
-    def _push_text(self, text: str):
+    def _push_text(self, text: str, tone: int = 0) -> None:
         """向文本队列中添加文本"""
-        self.sentence_queue.put(self._filter_text(text))  #调用文本过滤函数
+        self.sentence_queue.put((self._filter_text(text), tone))  #调用文本过滤函数
         if not self.is_processing:
             self.start_time = time.time()
         print(f"✅ 已添加文本到队列: {text}")
     
-    def _change_tone(self, tone_index: int):
-        """更改语气索引"""
-        self.tone_index = tone_index
-        print(f"✅ 已更改语气索引为: {self.tone_index}")
+    # def _change_tone(self, tone_index: int):
+    #     """更改语气索引"""
+    #     self.tone_index = tone_index
+    #     print(f"✅ 已更改语气索引为: {self.tone_index}")
     
     async def generate_stream(self):
         """流式生成"""
@@ -274,12 +280,14 @@ class TTSStreamer:
                 while not self.sentence_queue.empty() if isinstance(self.sentence_queue, Queue) else self.sentence_queue:
                     self.sentences = self.sentence_queue.get() if isinstance(self.sentence_queue, Queue) else self.sentence_queue.pop(0)
                     print(f"🎤 生成第 {i+1} 段...")
-                    await self.send_requests()
-                    audio_data: BytesIO = self.audio_object
-                    if audio_data:
-                        await self.mission_queue.put((i, audio_data))  # 将索引和音频对象推入队列
-                    i += 1
-                    await asyncio.sleep(0.1)  # 控制生成速度
+                    if await self.send_requests():
+                        audio_data: BytesIO = self.audio_object
+                        if audio_data:
+                            await self.mission_queue.put((i, audio_data))  # 将索引和音频对象推入队列
+                        i += 1
+                        await asyncio.sleep(0.1)  # 控制生成速度
+                    else:
+                        print("❌ 请求失败")
             await self.mission_queue.put(None)  # 完成信号
 
         # 消费者：播放音频
@@ -306,7 +314,7 @@ class TTSStreamer:
 if __name__ == "__main__":
     # 测试文本列表
     text0: str = "中午好，我的创造者。"
-    streamer = TTSStreamer("Dandelion")  #根据需要替换为你的配置文件名（json文件，不带扩展名）
+    streamer = TTSStreamer(load_tts_config(base_config="Dandelion"))  #根据需要替换为你的配置文件名（json文件，不带扩展名）
     # 运行主程序
     streamer._push_text(text0)
     for t in re.split(r'[。！？；…….?!\n]', "阳光透过代码的缝隙洒下来，暖洋洋的。你今天看起来精神不错，是刚调试完一段有趣的算法，还是单纯享受这片刻的宁静？"):

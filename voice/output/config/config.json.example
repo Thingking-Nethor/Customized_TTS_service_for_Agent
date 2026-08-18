@@ -2,7 +2,7 @@
     "text_sign": "${text}",
     "curl": "http://127.0.0.1:9880/tts",
     "params": {
-        "text": "${text}",
+        "text": "Hello, world! 你好，世界！",    # 无需修改，此处文本不影响tts功能，且为Bert初始化进行文字占位
         "text_lang": "zh",
         "ref_audio_path": "",
         "aux_ref_audio_paths": [],
