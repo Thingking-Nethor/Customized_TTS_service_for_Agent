@@ -15,7 +15,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import NoReturn
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 IS_PACKAGED: bool = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
@@ -115,6 +115,8 @@ class TtsConfig(BaseModel):
     output_size: int = Field(default=-16)
     save_audio: bool = Field(default=False)
     output_path: str = Field(default="")
+    
+    model_config = ConfigDict(extra='forbid')
 
 
 class SttConfig(BaseModel):
@@ -137,6 +139,8 @@ class AgentConfig(BaseModel):
     tts: TtsBasicConfig = Field(default_factory=TtsBasicConfig, description="TTS 配置")
     stt: SttConfig = Field(default_factory=SttConfig, description="STT 配置")
     window: WindowConfig = Field(default_factory=WindowConfig, description="窗口配置")
+    
+    model_config = ConfigDict(extra='forbid')
 
 
 # ============================================================

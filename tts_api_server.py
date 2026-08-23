@@ -50,8 +50,13 @@ def close_tts_terminate(signal, frame) -> None:
     sys.exit(0)
 
 if __name__ == "__main__":
+    signal(SIGINT, close_tts_terminate)
+    streamer: TTSStreamer = TTSStreamer(load_tts_config())
     try:
-        if config.tts.auto_start_GPT_SoVITS_api:
+        if config.tts.auto_start_GPT_SoVITS_api and requests.post(
+                            url=streamer.url,
+                            data=streamer.params.model_dump_json(),
+                            headers={"Content-Type":"application/json"}).status_code!=200:
             tts_api_process: subprocess.Popen[bytes] = subprocess.Popen(
                 args=r"tools\go_api_v2.bat",
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
@@ -69,20 +74,20 @@ if __name__ == "__main__":
                     print(f"stdout:\n{stdout}")
             else:
                 print("✅ TTS外部服务启动成功")
-            signal(SIGINT, close_tts_terminate)
+                while True:
+                    try:
+                        init_request = requests.post(
+                            url=streamer.url,
+                            data=streamer.params.model_dump_json(),
+                            headers={"Content-Type":"application/json"})  # 发送初始请求以初始化Bert
+                    except requests.exceptions.ConnectionError:
+                        print("推理端未完全启动，等待3秒")
+                        time.sleep(3)
+                    else:
+                        print(f"✅ 发送初始请求成功，Bert已初始化: {init_request.status_code}")
+                        del init_request
+                        break
     except Exception as e:
         print(f"❌ 启动TTS服务失败: {e}")
-    #根据需要替换为你的配置文件名（json文件，不带扩展名）
-    streamer: TTSStreamer = TTSStreamer(load_tts_config())
-    while True:
-        try:
-            init_request = requests.post(url=streamer.url, json=streamer.params.model_dump())  # 发送初始请求以初始化Bert
-        except requests.exceptions.ConnectionError:
-            print("推理端未完全启动，等待3秒")
-            time.sleep(3)
-        else:
-            print(f"✅ 发送初始请求成功，Bert已初始化: {init_request.status_code}")
-            del init_request
-            break
     Thread(target=asyncio.run, args=(streamer.generate_stream(),), daemon=True).start()
     uvicorn.run(tts_service, host="127.0.0.1", port=8997)

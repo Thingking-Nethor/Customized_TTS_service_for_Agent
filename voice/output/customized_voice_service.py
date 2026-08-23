@@ -39,8 +39,8 @@ class TTSStreamer:
         self.start_time: float = 0  # 记录开始时间
         self.end_time: float = 0  # 记录结束时间
         self.is_processing: bool = False
-        self.sentence_queue: Queue[tuple[str, int]] = Queue()
-        self.mission_queue: asyncio.Queue[tuple[int, BytesIO] | None] = asyncio.Queue()  # 使用 asyncio.Queue 管理任务
+        self.sentences_queue: Queue[tuple[str, int]] = Queue()
+        self.mission_queue: asyncio.Queue[tuple[int, BytesIO]] = asyncio.Queue()  # 使用 asyncio.Queue 管理任务
         self.sentences: tuple[str, int] = ("", 0)  # 存储即将推理的文本
         # self.tone_index: int = 0  # 用于选择语气的索引
         self.audio_object: BytesIO = BytesIO()  # 用于存储音频数据的BytesIO对象
@@ -115,8 +115,9 @@ class TTSStreamer:
                     print(f"✅ 发送POST请求: {self.url}\n{self.params}")
                     async with aiohttp.ClientSession(timeout=timeout) as session:
                         async with session.post(
-                            self.url, 
-                            json=self.params.model_dump(),
+                            url=self.url, 
+                            data=self.params.model_dump_json(),
+                            headers={"Content-Type":"application/json"}
                         ) as self._response:
                             return await self._handle_response()
                 else:
@@ -171,17 +172,17 @@ class TTSStreamer:
             logging.error(f"❌ 静音处理失败: {e}")
             self.audio_object = BytesIO(content)  # 返回原始音频数据
             return self.audio_object  # 返回原始音频数据
+        else:
+            print("✅ 静音处理成功！")
         
         self.audio_object = audio_data_segmented  # 存储处理后的音频数据
         return self.audio_object  # 返回处理后的音频BytesIO对象
 
-    async def play_audio(self):
+    async def play_audio(self) -> None:
         '''播放音频（直接从内存）'''
         
         # 从任务队列中获取音频对象
         item = await self.mission_queue.get()
-        if item is None:
-            return
         index, audio_data = item  # 获取音频对象
         if index == 0:  # 只有在处理第一段文本时才记录时间
             self.end_time = time.time()  # 更新结束时间
@@ -250,7 +251,7 @@ class TTSStreamer:
         except Exception as e:
             logging.error(f"❌ 音频系统错误：{e}")
         
-    def clear_audio_cache(self):
+    def clear_audio_cache(self) -> None:
         '''清除内存中的音频数据'''
         self._response = None  # 清除当前音频数据
         print("✅ 已清除内存中的音频缓存。")
@@ -258,24 +259,24 @@ class TTSStreamer:
     
     def _push_text(self, text: str, tone: int = 0) -> None:
         """向文本队列中添加文本"""
-        self.sentence_queue.put((self._filter_text(text), tone))  #调用文本过滤函数
+        self.sentences_queue.put((self._filter_text(text), tone))  #调用文本过滤函数
         if not self.is_processing:
             self.start_time = time.time()
         print(f"✅ 已添加文本到队列: {text}")
     
     
-    async def generate_stream(self):
+    async def generate_stream(self) -> None:
         """流式生成"""
         self.is_processing = True
         
         # 生产者：生成音频
-        async def producer():
+        async def producer() -> None:
             #等待文本队列更新
-            while not update_texts_task.done():
+            while True:
                 i = 0  # 这里可以根据需要调整索引
                 await asyncio.sleep(0.5)
-                while not self.sentence_queue.empty():
-                    self.sentences = self.sentence_queue.get()
+                while not self.sentences_queue.empty():
+                    self.sentences = self.sentences_queue.get()
                     print(f"🎤 生成第 {i+1} 段...")
                     if await self.send_requests():
                         audio_data: BytesIO = self.audio_object
@@ -285,7 +286,6 @@ class TTSStreamer:
                         await asyncio.sleep(0.1)  # 控制生成速度
                     else:
                         print("❌ 请求失败")
-            await self.mission_queue.put(None)  # 完成信号
 
         # 消费者：播放音频
         async def consumer():
@@ -296,7 +296,7 @@ class TTSStreamer:
         async def update_texts():
             while True:
                 await asyncio.sleep(3)  # 每三秒检查一次
-                if not self.sentence_queue.empty():
+                if not self.sentences_queue.empty():
                     print("🔄 文本队列更新中...")
                 else:
                     if self._response:
@@ -305,8 +305,7 @@ class TTSStreamer:
                     self.is_processing = False
         
         # 并发运行
-        update_texts_task = asyncio.create_task(update_texts())
-        await asyncio.gather(producer(), consumer(), update_texts_task)
+        await asyncio.gather(producer(), consumer(), update_texts(), return_exceptions=True)
 
 if __name__ == "__main__":
     # 测试文本列表
