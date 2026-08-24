@@ -50,15 +50,19 @@ class TTSStreamer:
         """过滤文本"""
         # 过滤括号内容
         if self.json.filter_brackets:
-            text = re.sub(r'【.*?】', '', text)
-            text = re.sub(r'\[.*?\]', '', text)
+            text = re.sub('【.*?】', '', text)
+            text = re.sub('\\[.*?\\]', '', text)
+            text = re.sub('（.*?）', '', text)
+            text = re.sub('\\(.*?\\)', '', text)
+            text = re.sub('`.*?`', '', text)    # 过滤单行代码端
+            text = re.sub('^\\|.*?\\|$', '', text)  # 过滤表格内容
         # 过滤特殊字符（不过滤中文）
         if self.json.filter_special_chars:
             # 移除表情符号（简化版）
             text = re.sub(r'[\U00010000-\U0010FFFF]', '', text)
             # 移除一些特殊符号（保留中文和常用标点）
             # 使用原始字符串，注意 \w 在 Python 3 中包含中文
-            text = re.sub('[^\\w\\s，。！？、；：""''（）【】,.!?;:()\\-\\+\\*/=<>@#$%^&_|\\`~]', '', text)
+            text = re.sub('[^\\w\\s，。！？、；：""'',.!?;:\\-\\+\\*/=<>@#$%^&_|\\`~]', '', text)
         print(f"✅ 文本过滤完成：{text}")
         return text
     
@@ -259,10 +263,11 @@ class TTSStreamer:
     
     def _push_text(self, text: str, tone: int = 0) -> None:
         """向文本队列中添加文本"""
-        self.sentences_queue.put((self._filter_text(text), tone))  #调用文本过滤函数
+        filtered_text: str = self._filter_text(text)
+        self.sentences_queue.put((filtered_text, tone))  #调用文本过滤函数
         if not self.is_processing:
             self.start_time = time.time()
-        print(f"✅ 已添加文本到队列: {text}")
+        print(f"✅ 已添加文本到队列: {filtered_text}")
     
     
     async def generate_stream(self) -> None:
@@ -285,7 +290,7 @@ class TTSStreamer:
                         i += 1
                         await asyncio.sleep(0.1)  # 控制生成速度
                     else:
-                        print("❌ 请求失败")
+                        print("无请求")
 
         # 消费者：播放音频
         async def consumer():

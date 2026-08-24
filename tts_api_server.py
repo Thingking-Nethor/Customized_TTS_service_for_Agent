@@ -25,7 +25,7 @@ def generate_tts(text: str) -> dict[str, str]:
     """接收文本并生成语音"""
     global streamer
     # 使用 lookbehind 在分隔符后切分，保留分隔符在句子末尾
-    sentences: list[str] = re.split(r'(?<=[。！？；…….?!\n])', text)
+    sentences: list[str] = re.split(r'(?<=[。！？；?!\n])|(?<=……)|(?<=\. )', text)
 
     if not sentences:
         return {"message": "文本已接收，但未检测到完整句子。"}
@@ -87,6 +87,8 @@ if __name__ == "__main__":
                         print(f"✅ 发送初始请求成功，Bert已初始化: {init_request.status_code}")
                         del init_request
                         break
+        else:
+            print('✅ 使用外部TTS服务')
     except Exception as e:
         print(f"❌ 启动TTS服务失败: {e}")
     Thread(target=asyncio.run, args=(streamer.generate_stream(),), daemon=True).start()
