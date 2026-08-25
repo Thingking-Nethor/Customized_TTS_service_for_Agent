@@ -6,7 +6,6 @@ Agent 配置系统 - 基于Pydantic实现类型安全和验证
 import os
 import sys
 import json
-import re
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -220,8 +219,9 @@ def load_tts_config(base_config: AgentConfig | str | None = None) -> TtsConfig |
     if tts_config_path.exists():
         with open(tts_config_path, "r", encoding="utf-8") as f:
             tts_raw = f.read()
-        data: dict = json.loads(tts_raw)
-        return TtsConfig(name=character, **data)
+        tts_config: TtsConfig = TtsConfig.model_validate_json(json_data=tts_raw)
+        tts_config.name = character
+        return tts_config
     else:
         raise ValueError(f"警告：配置文件 {tts_config_path} 不存在，请检查配置")
 

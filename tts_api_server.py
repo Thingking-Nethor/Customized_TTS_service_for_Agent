@@ -42,51 +42,57 @@ def generate_tts(text: str) -> dict[str, str]:
 def close_tts_terminate(signal, frame) -> None:
     print("正在关闭tts终端……")
     global tts_api_process
-    if os.name == 'nt':
-        tts_api_process.send_signal(CTRL_BREAK_EVENT)
-    else:
-        tts_api_process.send_signal(SIGINT)
-    tts_api_process.terminate()
+    if 'tts_api_process' in globals():
+        if os.name == 'nt':
+            tts_api_process.send_signal(CTRL_BREAK_EVENT)
+        else:
+            tts_api_process.send_signal(SIGINT)
+        tts_api_process.terminate()
     sys.exit(0)
 
 if __name__ == "__main__":
     signal(SIGINT, close_tts_terminate)
     streamer: TTSStreamer = TTSStreamer(load_tts_config())
-    try:
-        if config.tts.auto_start_GPT_SoVITS_api and requests.post(
-                            url=streamer.url,
-                            data=streamer.params.model_dump_json(),
-                            headers={"Content-Type":"application/json"}).status_code!=200:
-            tts_api_process: subprocess.Popen[bytes] = subprocess.Popen(
-                args=r"tools\go_api_v2.bat",
-                creationflags=subprocess.CREATE_NEW_CONSOLE,
-            )
-            # 非阻塞检查进程是否立即退出（启动失败）
-            time.sleep(1)
-            if tts_api_process.poll():
-                stdout: bytes
-                stderr: bytes
-                stdout, stderr = tts_api_process.communicate()
-                print(f"❌ TTS外部服务启动失败 (exit code: {tts_api_process.returncode})")
-                if stderr:
-                    print(f"stderr:\n{stderr}")
-                if stdout:
-                    print(f"stdout:\n{stdout}")
-            else:
-                print("✅ TTS外部服务启动成功")
-                while True:
-                    try:
-                        init_request = requests.post(
-                            url=streamer.url,
-                            data=streamer.params.model_dump_json(),
-                            headers={"Content-Type":"application/json"})  # 发送初始请求以初始化Bert
-                    except requests.exceptions.ConnectionError:
-                        print("推理端未完全启动，等待3秒")
-                        time.sleep(3)
-                    else:
-                        print(f"✅ 发送初始请求成功，Bert已初始化: {init_request.status_code}")
-                        del init_request
-                        break
+    try:  # 推理服务已启用时不重复启动
+        try:
+            init_request = requests.post(
+                    url=streamer.url,
+                    data=streamer.params.model_dump_json(),
+                    headers={"Content-Type":"application/json"},
+                    timeout=3)
+            del init_request
+        except (requests.ConnectionError, requests.exceptions.Timeout):
+            if config.tts.auto_start_GPT_SoVITS_api:
+                tts_api_process: subprocess.Popen[bytes] = subprocess.Popen(
+                    args=r"tools\go_api_v2.bat",
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+                # 非阻塞检查进程是否立即退出（启动失败）
+                time.sleep(1)
+                if tts_api_process.poll():
+                    stdout: bytes
+                    stderr: bytes
+                    stdout, stderr = tts_api_process.communicate()
+                    print(f"❌ TTS外部服务启动失败 (exit code: {tts_api_process.returncode})")
+                    if stderr:
+                        print(f"stderr:\n{stderr}")
+                    if stdout:
+                        print(f"stdout:\n{stdout}")
+                else:
+                    print("✅ TTS外部服务启动成功")
+                    while True:
+                        try:
+                            init_request = requests.post(
+                                url=streamer.url,
+                                data=streamer.params.model_dump_json(),
+                                headers={"Content-Type":"application/json"})  # 发送初始请求以初始化Bert
+                        except requests.exceptions.ConnectionError:
+                            print("推理端未完全启动，等待3秒")
+                            time.sleep(3)
+                        else:
+                            print(f"✅ 发送初始请求成功，Bert已初始化: {init_request.status_code}")
+                            del init_request
+                            break
         else:
             print('✅ 使用外部TTS服务')
     except Exception as e:
